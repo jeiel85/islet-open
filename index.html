@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Islet Open</title>
+  <meta name="description" content="3D pixel-art tennis on a floating island: time your shots, read the surface, challenge line calls. three.js, no install." />
+  <meta property="og:title" content="Islet Open · 하늘섬 오픈" />
+  <meta property="og:description" content="Pixel-art tennis in a stadium on a floating island. Timing-based shots, hard/clay/grass physics, line-call challenges, day to floodlit night." />
+  <meta property="og:image" content="https://jeiel85.github.io/islet-open/docs/cover.jpg" />
+  <meta name="theme-color" content="#123a2a" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%23123a2a'/><rect x='3' y='3' width='10' height='10' fill='%23d9f23a'/><rect x='3' y='6' width='2' height='4' fill='%23f6f3ea'/><rect x='11' y='6' width='2' height='4' fill='%23f6f3ea'/><rect x='2' y='12' width='12' height='2' fill='%237a5634'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green: #123a2a;
+      --green-2: #1d4d35;
+      --cream: #f6f3ea;
+      --cream-2: #ebe6d6;
+      --ink: #1d2420;
+      --ink-soft: rgba(29, 36, 32, 0.62);
+      --line: rgba(29, 36, 32, 0.14);
+      --red: #c8322c;
+      --yellow: #ffd23f;
+      --ball: #d9f23a;
+      --glass: rgba(10, 22, 16, 0.72);
+      --pixel: 'Silkscreen', 'JetBrains Mono', monospace;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --font: 'Noto Sans KR', system-ui, sans-serif;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--green); color: var(--ink); font-family: var(--font); overflow: hidden; }
+    button { font: inherit; color: inherit; }
+    #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header {
+      display: flex; align-items: center; gap: 14px; padding: 7px 14px;
+      background: var(--green); color: var(--cream); border-bottom: 3px solid var(--red);
+    }
+    .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+    .brand h1 { margin: 0; font-family: var(--pixel); font-size: 22px; letter-spacing: 1px; white-space: nowrap; }
+    .brand .ko { font-size: 12px; opacity: 0.75; white-space: nowrap; }
+    #matchLabel { font-family: var(--pixel); font-size: 12px; opacity: 0.9; margin-left: auto; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hbtn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 5px 9px; cursor: pointer; font-size: 13px; color: var(--cream); }
+    .hbtn:hover { background: rgba(255,255,255,0.16); }
+    main { display: grid; grid-template-columns: 1fr 330px; min-height: 0; }
+    #stage { position: relative; min-width: 0; min-height: 0; background: #0b1410; overflow: hidden; }
+    #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+
+    /* ── side panel ── */
+    #panel { background: var(--cream); overflow-y: auto; border-left: 3px solid var(--green-2); padding: 10px 12px 40px; font-size: 13px; }
+    #panel section { border-bottom: 1px dashed var(--line); padding: 10px 0 12px; }
+    #panel h2 { font-family: var(--pixel); font-size: 13px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; color: var(--green); }
+    #panel h2 small { font-family: var(--font); font-size: 11px; color: var(--ink-soft); font-weight: 500; }
+    .row { display: grid; grid-template-columns: 74px 1fr; gap: 6px; align-items: center; margin: 6px 0; }
+    .row > label { color: var(--ink-soft); font-size: 12px; }
+    .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
+    .seg button { flex: 1; padding: 5px 2px; border: 0; background: transparent; cursor: pointer; font-size: 12px; border-right: 1px solid var(--line); white-space: nowrap; }
+    .seg button:last-child { border-right: 0; }
+    .seg button[aria-pressed="true"] { background: var(--green-2); color: var(--cream); font-weight: 700; }
+    .seg button:hover:not([aria-pressed="true"]) { background: var(--cream-2); }
+    select { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; font-size: 12px; }
+    .primary { width: 100%; margin-top: 8px; padding: 9px; border: 0; border-radius: 7px; background: var(--red); color: #fff; font-weight: 900; cursor: pointer; font-size: 14px; letter-spacing: 0.5px; box-shadow: 0 3px 0 #8a1f1b; }
+    .primary:active { transform: translateY(2px); box-shadow: 0 1px 0 #8a1f1b; }
+    .secondary { width: 100%; margin-top: 6px; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer; font-size: 12px; }
+    .bars { display: grid; grid-template-columns: 54px 1fr 40px; gap: 4px 6px; align-items: center; font-size: 11px; margin-top: 6px; }
+    .bar { height: 8px; background: var(--cream-2); border-radius: 2px; overflow: hidden; display: flex; gap: 1px; }
+    .bar i { flex: 1; background: var(--cream-2); }
+    .bar i.on { background: var(--green-2); }
+    .blurb { font-size: 11.5px; color: var(--ink-soft); margin: 6px 0 0; line-height: 1.45; }
+    .profile { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-soft); margin: 2px 0 4px 80px; }
+    .chip { width: 12px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
+    table.stats { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.stats th, table.stats td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+    table.stats th { text-align: left; font-weight: 500; color: var(--ink-soft); }
+    table.stats td { text-align: center; font-family: var(--mono); font-size: 12px; }
+    table.stats thead td { font-family: var(--pixel); font-size: 10px; }
+    .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; }
+    kbd { font-family: var(--mono); font-size: 11px; background: #fff; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+    input[type=range] { width: 100%; accent-color: var(--green-2); }
+
+    /* ── HUD over the canvas ── */
+    .hud { position: absolute; pointer-events: none; z-index: 2; }
+    #scorebug { top: 10px; left: 10px; background: var(--glass); color: #fff; border-radius: 6px; padding: 6px 8px; font-family: var(--mono); font-size: 13px; min-width: 210px; border-left: 4px solid var(--yellow); }
+    #scorebug table { border-collapse: collapse; }
+    #scorebug td { padding: 1px 5px; }
+    #scorebug .nm { font-family: var(--pixel); font-size: 12px; min-width: 90px; }
+    #scorebug .sv { width: 8px; }
+    #scorebug .sv i { display: inline-block; width: 7px; height: 7px; background: var(--ball); border-radius: 50%; }
+    #scorebug .set { color: #bfe8c9; text-align: center; }
+    #scorebug .set.cur { color: #fff; font-weight: 700; }
+    #scorebug .pt { background: var(--yellow); color: #111; font-weight: 700; text-align: center; min-width: 30px; border-radius: 3px; }
+    #scorebug .status { font-family: var(--pixel); font-size: 10px; color: var(--yellow); margin-top: 3px; min-height: 12px; }
+    #chal { font-size: 10px; opacity: 0.85; }
+    #speed { top: 10px; right: 10px; background: var(--glass); color: #fff; border-radius: 6px; padding: 6px 10px; font-family: var(--pixel); font-size: 12px; text-align: right; }
+    #speed b { font-size: 20px; color: var(--ball); display: block; }
+    #wind { font-size: 10px; opacity: 0.85; margin-top: 2px; }
+    #banner { left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.45); opacity: 0; transition: opacity 0.15s; }
+    #banner .big { font-family: var(--pixel); font-size: clamp(30px, 6vw, 64px); line-height: 1; }
+    #banner .small { font-weight: 700; font-size: clamp(13px, 1.8vw, 18px); margin-top: 8px; background: rgba(0,0,0,0.45); padding: 3px 10px; border-radius: 4px; display: inline-block; }
+    #banner.show { opacity: 1; }
+    #feedback { left: 50%; top: 56px; transform: translateX(-50%); font-family: var(--pixel); font-size: 22px; color: #fff; text-shadow: 0 2px 0 #000; opacity: 0; }
+    #feedback.pop { animation: pop 0.8s ease-out; }
+    @keyframes pop { 0% { opacity: 0; transform: translate(-50%, 10px) scale(0.8); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -14px); } }
+    #meter { left: 50%; top: 26px; transform: translateX(-50%); width: min(300px, 34%); height: 22px; opacity: 0; transition: opacity 0.12s; }
+    #meter.show { opacity: 1; }
+    #meter .track { position: absolute; inset: 6px 0; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.85); }
+    #meter .good { position: absolute; top: 0; bottom: 0; background: rgba(217,242,58,0.35); }
+    #meter .perfect { position: absolute; top: 0; bottom: 0; background: var(--ball); }
+    #meter .cursor { position: absolute; top: 0; width: 4px; height: 22px; background: #fff; box-shadow: 0 0 0 2px #000; transform: translateX(-2px); }
+    #meter .lbl { position: absolute; top: -16px; font-family: var(--pixel); font-size: 9px; color: #fff; text-shadow: 0 1px 0 #000; }
+    #prompt { left: 50%; bottom: 44px; transform: translateX(-50%); background: var(--glass); color: #fff; padding: 5px 12px; border-radius: 5px; font-size: 13px; white-space: nowrap; opacity: 0; transition: opacity 0.2s; }
+    #prompt.show { opacity: 1; }
+    #ticker { left: 0; right: 0; bottom: 0; background: rgba(246,243,234,0.93); color: var(--ink); font-size: 12.5px; padding: 5px 12px calc(5px + var(--safe-b)); display: flex; gap: 8px; align-items: center; border-top: 2px solid var(--green-2); }
+    #ticker b { font-family: var(--pixel); font-size: 10px; background: var(--red); color: #fff; padding: 2px 6px; border-radius: 3px; }
+    #ticker span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #challengeBtn { pointer-events: auto; right: 10px; bottom: 44px; background: var(--yellow); color: #111; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 900; cursor: pointer; display: none; box-shadow: 0 3px 0 #a7861a; animation: pulse 0.9s infinite alternate; }
+    #challengeBtn.show { display: block; }
+    @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+    #review { left: 50%; top: 14px; transform: translateX(-50%); background: #0d1b14; color: #fff; border: 2px solid var(--yellow); padding: 8px 18px; border-radius: 6px; text-align: center; display: none; }
+    #review.show { display: block; }
+    #review .t { font-family: var(--pixel); font-size: 14px; color: var(--yellow); }
+    #review .r { font-family: var(--pixel); font-size: 22px; margin-top: 4px; min-height: 26px; }
+    #review .s { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+    .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; z-index: 5; background: rgba(6,14,10,0.35); }
+    .overlay.show { display: flex; }
+    .card { background: var(--cream); border: 3px solid var(--green); border-radius: 10px; padding: 18px 20px; max-width: min(460px, 92%); box-shadow: 0 8px 0 rgba(0,0,0,0.25); text-align: center; }
+    .card h2 { font-family: var(--pixel); margin: 0 0 6px; color: var(--green); font-size: 26px; }
+    .card p { margin: 6px 0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.5; }
+    .card .btns { display: flex; gap: 8px; margin-top: 12px; }
+    .card .btns button { flex: 1; }
+    #title { background: linear-gradient(180deg, rgba(6,14,10,0) 40%, rgba(6,14,10,0.45)); align-items: flex-end; padding-bottom: 60px; }
+    #title .card h2 { font-size: 34px; }
+    #title .tag { font-family: var(--pixel); font-size: 11px; color: var(--red); letter-spacing: 1px; }
+
+    /* ── touch controls ── */
+    #touch { position: absolute; inset: 0; z-index: 3; pointer-events: none; display: none; }
+    .touch #touch { display: block; }
+    #joy { position: absolute; left: 18px; bottom: 60px; width: 120px; height: 120px; border-radius: 50%; background: rgba(0,0,0,0.25); border: 2px solid rgba(255,255,255,0.35); pointer-events: auto; touch-action: none; }
+    #joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: rgba(255,255,255,0.75); }
+    #shotPad { position: absolute; right: 14px; bottom: 60px; display: grid; grid-template-columns: repeat(2, 64px); gap: 8px; pointer-events: auto; }
+    #shotPad button { height: 54px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.6); background: rgba(10,22,16,0.6); color: #fff; font-weight: 700; font-size: 12px; touch-action: manipulation; }
+    #shotPad button.t { background: rgba(217,242,58,0.85); color: #111; }
+
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      #panel { position: fixed; right: 0; top: 44px; bottom: 0; width: min(360px, 92vw); z-index: 10; transform: translateX(105%); transition: transform 0.2s; box-shadow: -6px 0 18px rgba(0,0,0,0.3); }
+      body.panel-open #panel { transform: none; }
+      .brand .ko, #matchLabel { display: none; }
+      #scorebug { font-size: 11px; min-width: 0; }
+      #scorebug .nm { min-width: 64px; font-size: 10px; }
+      #speed b { font-size: 15px; }
+      #challengeBtn { bottom: 196px; }
+      #meter { top: auto; bottom: 196px; width: min(300px, 76%); }
+      #feedback { top: auto; bottom: 226px; }
+      #prompt { bottom: 180px; white-space: normal; text-align: center; max-width: 90%; }
+    }
+    @media (min-width: 861px) { #panelBtn { display: none; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand"><h1>ISLET OPEN</h1><span class="ko">하늘섬 오픈 · 픽셀 테니스</span></div>
+      <div id="matchLabel"></div>
+      <button class="hbtn" id="pauseBtn" title="일시 정지 (Esc)">⏸</button>
+      <button class="hbtn" id="muteBtn" title="소리 (M)">🔊</button>
+      <button class="hbtn" id="panelBtn" title="설정 (H)">☰</button>
+    </header>
+    <main>
+      <div id="stage">
+        <div class="hud" id="scorebug"></div>
+        <div class="hud" id="speed"><span>SERVE</span><b id="speedVal">—</b><div id="wind"></div></div>
+        <div class="hud" id="banner"><div class="big"></div><div class="small"></div></div>
+        <div class="hud" id="feedback"></div>
+        <div class="hud" id="meter"><div class="track"><div class="good"></div><div class="perfect"></div></div><div class="cursor"></div><div class="lbl" style="left:0">EARLY</div><div class="lbl" style="right:0">LATE</div></div>
+        <div class="hud" id="prompt"></div>
+        <div class="hud" id="review"><div class="t">LINECAM REVIEW</div><div class="r"></div><div class="s"></div></div>
+        <button class="hud" id="challengeBtn">챌린지 <kbd>C</kbd> <span></span></button>
+        <div class="hud" id="ticker"><b>COMMENTARY</b><span id="tickerText">하늘섬 오픈에 오신 것을 환영합니다.</span></div>
+        <div id="touch">
+          <div id="joy"><i></i></div>
+          <div id="shotPad">
+            <button data-shot="slice">슬라이스</button>
+            <button data-shot="lob">로브</button>
+            <button data-shot="flat">플랫</button>
+            <button data-shot="topspin" class="t">탑스핀</button>
+          </div>
+        </div>
+        <div class="overlay show" id="title">
+          <div class="card">
+            <div class="tag">FLOATING ISLAND · PIXEL TENNIS</div>
+            <h2>ISLET OPEN</h2>
+            <p>구름 위에 떠 있는 섬의 센터 코트. 공이 들어오는 순간에 맞춰 스윙하세요 — 빠르면 당겨지고, 늦으면 밀립니다.</p>
+            <div class="btns"><button class="primary" id="titleStart">경기 시작</button><button class="secondary" id="titleWatch">관전하기</button></div>
+          </div>
+        </div>
+        <div class="overlay" id="pauseOv"><div class="card"><h2>PAUSED</h2><p>Esc 또는 P로 계속합니다.</p><div class="btns"><button class="primary" id="resumeBtn">계속하기</button><button class="secondary" id="quitBtn">경기 그만두기</button></div></div></div>
+        <div class="overlay" id="overOv"><div class="card"><h2 id="overTitle">MATCH</h2><p id="overScore"></p><p id="overStats"></p><div class="btns"><button class="primary" id="againBtn">다시 하기</button><button class="secondary" id="menuBtn">관전 모드로</button></div></div></div>
+      </div>
+      <aside id="panel">
+        <section>
+          <h2>경기 <small id="matchState">관전 중</small></h2>
+          <div class="row"><label>내 선수</label><select id="selHuman"></select></div>
+          <div class="profile" id="profHuman"></div>
+          <div class="row"><label>상대</label><select id="selAi"></select></div>
+          <div class="profile" id="profAi"></div>
+          <div class="row"><label>형식</label><div class="seg" data-key="format"></div></div>
+          <div class="row"><label>난이도</label><div class="seg" data-key="difficulty"></div></div>
+          <button class="primary" id="startBtn">경기 시작</button>
+          <button class="secondary" id="watchBtn">AI끼리 관전하기</button>
+        </section>
+        <section>
+          <h2>코트 · 컨디션 <small>공 물리에 반영</small></h2>
+          <div class="row"><label>표면</label><div class="seg" data-key="surface"></div></div>
+          <div class="bars" id="surfaceBars"></div>
+          <p class="blurb" id="surfaceBlurb"></p>
+          <div class="row"><label>바람</label><div class="seg" data-key="wind"></div></div>
+          <div class="row"><label>잔디 마모</label><input type="range" id="wear" min="0" max="1" step="0.05" value="0.35" /></div>
+        </section>
+        <section>
+          <h2>시간대 <small>밤에는 조명탑 점등</small></h2>
+          <div class="row"><label>시간</label><div class="seg" data-key="time"></div></div>
+        </section>
+        <section>
+          <h2>코치 <small>내 선수의 기본 작전</small></h2>
+          <div class="row"><label>이동</label><div class="seg" data-key="autoMove"></div></div>
+          <div class="row"><label>서브 코스</label><div class="seg" data-key="serveSpot"></div></div>
+          <div class="row"><label>랠리 방향</label><div class="seg" data-key="rallyAim"></div></div>
+          <div class="row"><label>리스크</label><div class="seg" data-key="risk"></div></div>
+          <div class="row"><label>네트 대시</label><div class="seg" data-key="netRush"></div></div>
+          <div class="row"><label>조준 표시</label><div class="seg" data-key="aimHelper"></div></div>
+          <p class="blurb">방향키를 누르지 않고 치면 코치 작전대로 칩니다. 리스크가 클수록 라인 가까이 노립니다.</p>
+        </section>
+        <section>
+          <h2>보기</h2>
+          <div class="row"><label>카메라</label><div class="seg" data-key="camera"></div></div>
+          <div class="row"><label>픽셀 크기</label><div class="seg" data-key="pixel"></div></div>
+          <div class="row"><label>그림자</label><div class="seg" data-key="shadows"></div></div>
+          <div class="row"><label>심판 음성</label><div class="seg" data-key="voice"></div></div>
+        </section>
+        <section>
+          <h2>매치 센터</h2>
+          <table class="stats" id="statsTable"></table>
+        </section>
+        <section>
+          <h2>조작법</h2>
+          <div class="keys">
+            <span><kbd>WASD</kbd> <kbd>←↑↓→</kbd></span><span>이동(수동) · 조준(좌우=방향, 위=깊게, 아래=짧게)</span>
+            <span><kbd>J</kbd> <kbd>Space</kbd></span><span>탑스핀 / 플랫 서브</span>
+            <span><kbd>K</kbd></span><span>슬라이스 / 슬라이스 서브</span>
+            <span><kbd>L</kbd></span><span>로브 / 킥 서브</span>
+            <span><kbd>I</kbd></span><span>플랫 강타</span>
+            <span><kbd>U</kbd> <kbd>⇧K</kbd></span><span>드롭샷</span>
+            <span><kbd>C</kbd></span><span>라인 판정 챌린지</span>
+            <span><kbd>V</kbd> · <kbd>M</kbd> · <kbd>Esc</kbd></span><span>카메라 · 소리 · 일시 정지</span>
+          </div>
+          <p class="blurb">서브: 샷 키로 토스 → 공이 내려오기 시작할 때 다시 눌러 칩니다. 랠리: 공이 몸 앞에 올 때 누르세요. 게임패드도 지원합니다.</p>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

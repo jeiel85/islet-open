@@ -1,0 +1,13 @@
+{
+  "name": "islet-open",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "3D pixel-art tennis on a floating island — three.js, no build step",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python -m http.server 8000"
+  },
+  "author": "jeiel85",
+  "license": "MIT"
+}

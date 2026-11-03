@@ -1,0 +1,17 @@
+.claude/
+node_modules/
+*.log
+
+# 빌드/릴리즈 산출물 — 저장소 커밋 금지, Releases로 배포
+*.exe
+*.msi
+*.apk
+*.aab
+*.ipa
+*.dmg
+*.appimage
+.build-outputs/
+.ci-artifacts/
+.release-assets/
+publish*/
+dist/
