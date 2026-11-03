@@ -11,6 +11,7 @@ import { Input } from './input.js';
 import { Sound } from './audio.js';
 import { Hud } from './hud.js';
 import { pointCell, currentServer } from './scoring.js';
+import { FrameBudget, nextCheaperSetting } from './quality.js';
 
 // ── settings ──────────────────────────────────────────────────────────
 const STORE_KEY = 'islet-open.settings.v1';
@@ -53,11 +54,19 @@ const SEGS = {
 
 // ── renderer and scene ────────────────────────────────────────────────
 const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+} catch (err) {
+  window.__bootFail?.('webgl', err);
+  throw err;
+}
 renderer.setPixelRatio(1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.domElement.setAttribute('role', 'img');
+renderer.domElement.setAttribute('aria-label', '테니스 경기 화면');
 stage.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -70,7 +79,7 @@ const game = new Game();
 const input = new Input();
 const sound = new Sound();
 const hud = new Hud();
-window.__islet = { game, settings, input };
+window.__islet = { game, settings, input, renderer, booted: false };
 
 // Ball, shadow, trail, markers.
 const ballMat = new THREE.MeshLambertMaterial({ color: 0xd9f23a, emissive: 0x4a5a00 });
@@ -126,17 +135,17 @@ function applySurface() {
   document.getElementById('surfaceBlurb').textContent = s.blurb;
   updateLabel();
 }
+// Changing the time of day only touches light colours and intensities. The
+// set of shadow-casting lights never changes with it, so no shader recompiles.
 function applyTime() {
   world.setTimeOfDay(settings.time);
-  applyShadows();
+  stadium.setFloodlights(world.flood);
   updateLabel();
 }
 function applyShadows() {
   const on = settings.shadows === 'on';
   renderer.shadowMap.enabled = on;
-  const night = settings.time === 'night';
-  world.sun.castShadow = on && !night;
-  stadium.setFloodlights(world.flood, on && night);
+  world.sun.castShadow = on;
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
 }
 function applyCoach() {
@@ -156,6 +165,7 @@ function buildPanel() {
       const b = e.target.closest('button');
       if (!b) return;
       settings[key] = b.dataset.v;
+      if (key === 'shadows' || key === 'pixel') autoQuality = false; // the player's choice wins
       saveSettings();
       syncPanel();
       onSettingChanged(key);
@@ -261,7 +271,33 @@ function toggleMute() {
   sound.setEnabled(settings.sound);
   syncPanel();
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden && !game.demo && game.phase !== 'over') setPaused(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && !game.demo && game.phase !== 'over') setPaused(true);
+  if (!document.hidden) sound.unlock();
+});
+
+// ── GPU context loss ──────────────────────────────────────────────────
+// three.js keeps the context restorable and re-uploads resources itself; we
+// stop the match so no points are lost while the screen is gone.
+let contextLost = false;
+renderer.domElement.addEventListener('webglcontextlost', () => {
+  contextLost = true;
+  if (!game.demo && game.phase !== 'over') setPaused(true);
+  showNotice('그래픽 장치 연결이 끊겼습니다. 복구를 기다리는 중입니다…');
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  contextLost = false;
+  resize();
+  hideNotice();
+  hud.say('그래픽이 복구됐습니다.' + (paused ? ' 일시 정지를 풀면 경기가 이어집니다.' : ''));
+});
+function showNotice(text) {
+  document.getElementById('sysMsg').textContent = text;
+  document.getElementById('sysOv').classList.add('show');
+}
+function hideNotice() {
+  document.getElementById('sysOv').classList.remove('show');
+}
 
 // ── announcements ─────────────────────────────────────────────────────
 const SPOKEN = ['love', 'fifteen', 'thirty', 'forty'];
@@ -441,8 +477,10 @@ if (isTouch) document.body.classList.add('touch');
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); sound.unlock(); input.pressShot(b.dataset.shot); });
   }
 })();
-window.addEventListener('pointerdown', () => sound.unlock(), { once: true });
-window.addEventListener('keydown', () => sound.unlock(), { once: true });
+// Every gesture may resume audio: iOS leaves the context "interrupted"
+// after calls or app switches until the next user gesture.
+window.addEventListener('pointerdown', () => sound.unlock());
+window.addEventListener('keydown', () => sound.unlock());
 
 // ── camera ────────────────────────────────────────────────────────────
 const camPos = new THREE.Vector3(130, 70, 130);
@@ -608,11 +646,24 @@ function updateScoreboard3D() {
 let lastInput = null;
 let last = performance.now();
 let elapsed = 0;
+let autoQuality = true;
+const budget = new FrameBudget();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  const raw = Math.max(0, (now - last) / 1000);
   last = now;
-  step(dt, true);
+  step(Math.min(0.05, raw), true);
+  if (autoQuality && !document.hidden && !contextLost && budget.sample(raw)) lowerQuality();
+}
+
+function lowerQuality() {
+  const next = nextCheaperSetting(settings);
+  if (!next) { autoQuality = false; return; }
+  settings[next.key] = next.value;
+  saveSettings();
+  syncPanel();
+  onSettingChanged(next.key);
+  hud.say(`화면이 느려서 그래픽을 낮췄습니다 (${next.label}). 보기 설정에서 되돌릴 수 있습니다.`);
 }
 
 function step(dt, render) {
@@ -647,7 +698,7 @@ function step(dt, render) {
   updateScoreboard3D();
   if (Math.floor(elapsed * 4) !== Math.floor((elapsed - dt) * 4)) hud.renderScore(game);
 
-  if (render) renderer.render(scene, camera);
+  if (render && !contextLost) renderer.render(scene, camera);
 }
 
 // Debug/capture hook: run the game for `seconds` without waiting for
@@ -666,6 +717,7 @@ sound.voice = settings.voice === 'on';
 sound.enabled = settings.sound;
 applySurface();
 applyTime();
+applyShadows();
 resize();
 game.setWind(settings.wind);
 game.startMatch({ humanId: settings.human, aiId: settings.ai, formatId: 'tiebreak', difficultyId: 'pro', demo: true });
@@ -674,3 +726,5 @@ updateLabel();
 hud.renderScore(game);
 hud.renderStats(game);
 requestAnimationFrame(frame);
+window.__islet.booted = true;
+window.__bootDone?.();

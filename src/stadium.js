@@ -523,21 +523,10 @@ export function buildStadium(scene) {
     if (judgeSignal) { judgeSignal.t -= dt; if (judgeSignal.t <= 0) judgeSignal = null; }
   }
 
-  function setFloodlights(level, shadows) {
-    for (const s of spots) {
-      s.intensity = level * 1.6;
-      s.castShadow = false;
-    }
-    if (shadows) {
-      spots[0].castShadow = level > 0.5;
-      spots[3].castShadow = level > 0.5;
-      for (const s of [spots[0], spots[3]]) {
-        s.shadow.mapSize.set(1024, 1024);
-        s.shadow.camera.near = 8;
-        s.shadow.camera.far = 120;
-        s.shadow.bias = -0.0008;
-      }
-    }
+  // Floodlights never cast shadows: toggling shadow casters would recompile
+  // every material. Player shadows at night come from the moonlight.
+  function setFloodlights(level) {
+    for (const s of spots) s.intensity = level * 1.6;
     lampMat.emissive.set(level > 0 ? 0xfff3d0 : 0x000000);
     lampMat.emissiveIntensity = level;
     beamMat.opacity = level * 0.045;
