@@ -1,6 +1,6 @@
 {
   "name": "islet-open",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "3D pixel-art tennis on a floating island — three.js, no build step",

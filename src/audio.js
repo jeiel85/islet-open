@@ -10,7 +10,11 @@ export class Sound {
   }
 
   unlock() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    if (this.ctx) {
+      // 'suspended' (autoplay policy) or 'interrupted' (iOS calls, app switch).
+      if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
+      return;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();

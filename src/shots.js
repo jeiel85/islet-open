@@ -1,15 +1,19 @@
 // Shot solver: find the launch velocity that clears the net at a chosen height
 // and first lands on a chosen target, under drag, Magnus lift and wind.
-// Nested bisection — for a launch angle, the speed that reaches the target
-// distance is unique; the net-crossing height then rises monotonically with
-// the angle. If the needed speed exceeds the player's limit, fall back to the
-// flattest trajectory at that speed (the ball loops higher instead).
+// For a launch angle, the speed that reaches the target distance is unique;
+// the net-crossing height then rises monotonically with the angle. Both are
+// solved with bracketed false position (Illinois), which needs a handful of
+// trial flights instead of the dozens plain bisection would. If the needed
+// speed exceeds the player's limit, fall back to the flattest trajectory at
+// that speed (the ball loops higher instead).
 
 import { flyToGround, topspinAxis, makeBall } from './physics.js';
 
 const DEG = Math.PI / 180;
 const S_MIN = 1;
 const S_MAX = 90;
+const DIST_TOL = 0.003; // m along the shot
+const NET_TOL = 0.004;  // m over the net
 
 function launch(from, dx, dz, theta, speed, spinVec) {
   const c = Math.cos(theta);
@@ -25,14 +29,38 @@ function landingAlong(from, dx, dz, theta, speed, spinVec, wind) {
   return { dist: (r.x - from.x) * dx + (r.z - from.z) * dz, r };
 }
 
-function speedForDistance(from, dx, dz, theta, D, spinVec, wind) {
-  if (landingAlong(from, dx, dz, theta, S_MAX, spinVec, wind).dist < D) return null;
-  let lo = S_MIN, hi = S_MAX;
-  for (let i = 0; i < 16; i++) {
-    const mid = (lo + hi) / 2;
-    if (landingAlong(from, dx, dz, theta, mid, spinVec, wind).dist < D) lo = mid; else hi = mid;
+/**
+ * Root of an increasing function on [a, b] with f(a) < 0 ≤ f(b). Uses Illinois
+ * false position while both end values are finite, bisection otherwise
+ * (f may return ±Infinity where it is undefined).
+ */
+export function findRoot(f, a, b, fa, fb, tol, maxIter = 40) {
+  let side = 0;
+  let x = b, fx = fb;
+  for (let i = 0; i < maxIter; i++) {
+    const finite = Number.isFinite(fa) && Number.isFinite(fb) && fb !== fa;
+    x = finite ? (a * fb - b * fa) / (fb - fa) : (a + b) / 2;
+    if (!(x > a && x < b)) x = (a + b) / 2;
+    fx = f(x);
+    if (Math.abs(fx) <= tol || b - a < 1e-7) return { x, fx };
+    if (fx < 0) {
+      a = x; fa = fx;
+      if (side === -1 && Number.isFinite(fb)) fb /= 2;
+      side = -1;
+    } else {
+      b = x; fb = fx;
+      if (side === 1 && Number.isFinite(fa)) fa /= 2;
+      side = 1;
+    }
   }
-  return (lo + hi) / 2;
+  return { x, fx };
+}
+
+function speedForDistance(from, dx, dz, theta, D, spinVec, wind) {
+  const f = (sp) => landingAlong(from, dx, dz, theta, sp, spinVec, wind).dist - D;
+  const fb = f(S_MAX);
+  if (fb < 0) return null;
+  return findRoot(f, S_MIN, S_MAX, f(S_MIN), fb, DIST_TOL).x;
 }
 
 function solveOnce(from, aim, D, spin, sidespin, netY, maxSpeed, wind) {
@@ -42,27 +70,29 @@ function solveOnce(from, aim, D, spin, sidespin, netY, maxSpeed, wind) {
   const ax = topspinAxis(dx, dz);
   const spinVec = { x: ax.x * spin, y: sidespin, z: ax.z * spin };
 
-  // Outer bisection on angle so the net-crossing height hits netY.
-  let lo = -25 * DEG, hi = 72 * DEG;
+  // Angle so that the net-crossing height hits netY (−∞ where no speed reaches D).
   let best = null;
-  for (let i = 0; i < 16; i++) {
-    const mid = (lo + hi) / 2;
-    const s = speedForDistance(from, dx, dz, mid, D, spinVec, wind);
-    if (s === null) { lo = mid; continue; }
-    const r = flyToGround(launch(from, dx, dz, mid, s, spinVec), wind);
+  const g = (theta) => {
+    const s = speedForDistance(from, dx, dz, theta, D, spinVec, wind);
+    if (s === null) return -Infinity;
+    const r = flyToGround(launch(from, dx, dz, theta, s, spinVec), wind);
     const crossY = r.netY === null ? Infinity : r.netY;
-    best = { theta: mid, speed: s, r };
-    if (crossY < netY) lo = mid; else hi = mid;
-  }
+    const cand = { theta, speed: s, r, err: Math.abs(crossY - netY) };
+    if (!best || cand.err < best.err) best = cand;
+    return crossY - netY;
+  };
+  const lo = -25 * DEG, hi = 72 * DEG;
+  findRoot(g, lo, hi, g(lo), g(hi), NET_TOL);
 
   if (!best || best.speed > maxSpeed) {
     // Speed-limited: the flattest angle that still reaches D at maxSpeed.
-    let tlo = -25 * DEG, thi = 40 * DEG;
-    for (let i = 0; i < 22; i++) {
-      const mid = (tlo + thi) / 2;
-      if (landingAlong(from, dx, dz, mid, maxSpeed, spinVec, wind).dist < D) tlo = mid; else thi = mid;
-    }
-    const theta = (tlo + thi) / 2;
+    const f = (theta) => landingAlong(from, dx, dz, theta, maxSpeed, spinVec, wind).dist - D;
+    const tlo = -25 * DEG, thi = 40 * DEG;
+    const fa = f(tlo), fb = f(thi);
+    let theta;
+    if (fa >= 0) theta = tlo;
+    else if (fb < 0) theta = thi;
+    else theta = findRoot(f, tlo, thi, fa, fb, DIST_TOL).x;
     best = { theta, speed: maxSpeed, r: flyToGround(launch(from, dx, dz, theta, maxSpeed, spinVec), wind) };
   }
 
