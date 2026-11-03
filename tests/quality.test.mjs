@@ -34,6 +34,21 @@ test('background-tab gaps and single hitches are ignored', () => {
   assert.equal(fired, 0);
 });
 
+test('a device stuck below 4 fps still gets downgraded', () => {
+  // Review case: 120 consecutive 333 ms frames must not all be discarded.
+  assert.ok(run(new FrameBudget(), 1 / 3, 40) >= 1);
+});
+
+test('isolated long frames are hitches, not a slow device', () => {
+  const b = new FrameBudget();
+  let fired = 0;
+  for (let i = 0; i < 6000; i++) {
+    const dt = i % 120 === 0 ? 0.4 : i % 120 === 1 ? 0.35 : 1 / 60; // two long frames every 2 s
+    if (b.sample(dt)) fired++;
+  }
+  assert.equal(fired, 0);
+});
+
 test('downgrade order: shadows, then pixel size up to 4×', () => {
   const s = { shadows: 'on', pixel: '2' };
   const seen = [];

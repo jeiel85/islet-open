@@ -258,8 +258,10 @@ function startMatch(demo) {
 }
 
 let paused = false;
+let contextLost = false;
 function setPaused(v) {
   if (game.demo && v) return;
+  if (!v && contextLost) return; // nothing to see until the GPU comes back
   paused = v;
   game.paused = v;
   document.getElementById('pauseOv').classList.toggle('show', v);
@@ -279,7 +281,6 @@ document.addEventListener('visibilitychange', () => {
 // ── GPU context loss ──────────────────────────────────────────────────
 // three.js keeps the context restorable and re-uploads resources itself; we
 // stop the match so no points are lost while the screen is gone.
-let contextLost = false;
 renderer.domElement.addEventListener('webglcontextlost', () => {
   contextLost = true;
   if (!game.demo && game.phase !== 'over') setPaused(true);
@@ -677,7 +678,7 @@ function step(dt, render) {
     else if (a === 'panel') document.body.classList.toggle('panel-open');
   }
   if (inp.shots.length || inp.challenge) sound.unlock();
-  if (!paused && game.phase !== 'idle') {
+  if (!paused && !contextLost && game.phase !== 'idle') {
     game.update(dt, titleShown ? null : inp);
   }
   syncPlayers(paused ? 0 : dt);
